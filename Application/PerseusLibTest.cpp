@@ -5,8 +5,18 @@
 
 using namespace Perseus::Utils;
 
-int main(void)
+std::string folder = "/home/src/pwp3d/Files/";
+
+int main(int argc, char** argv)
 {
+  std::string sModelPath = folder + "Models/shuttle.obj";
+  std::string sSrcImage = folder + "Images/shuttle.jpg";
+  std::string sCameraMatrix = folder + "CameraCalibration/canon_t3.cal";
+  std::string sTargetMask = folder + "Masks/1280p_All_VideoMask.png";
+  std::string sHistSrc = folder + "Images/shuttle.jpg";
+  std::string sHistMask = folder + "Masks/shuttle.png";
+
+  
   //  std::string sModelPath = "/Users/luma/Code/Luma/PWP3D/Files/Models/Renderer/long.obj";
   //  std::string sSrcImage = "/Users/luma/Code/Luma/PWP3D/Files/Images/Red.png";
   //  std::string sCameraMatrix = "/Users/luma/Code/Luma/PWP3D/Files/CameraCalibration/900nc.cal";
@@ -24,20 +34,21 @@ int main(void)
   //  std::string sHistMask = "/Users/luma/Code/Luma/PWP3D/Files/Masks/248-ID-3-LiveImage.png";
 
   // red can demo
-  std::string sModelPath = "/Users/luma/Code/DataSet/Mesh/RedCan.obj";
-  std::string sSrcImage = "/Users/luma/Code/Luma/PWP3D/Files/Images/248-LiveRGB.png";
-  std::string sCameraMatrix = "/Users/luma/Code/Luma/PWP3D/Files/CameraCalibration/Kinect.cal";
-  std::string sTargetMask = "/Users/luma/Code/Luma/PWP3D/Files/Masks/480p_All_VideoMask.png";
-  std::string sHistSrc = "/Users/luma/Code/Luma/PWP3D/Files/Images/248-LiveRGB.png";
-  std::string sHistMask = "/Users/luma/Code/Luma/PWP3D/Files/Masks/248-ID-1-LiveImage.png";
+  //  std::string sModelPath = "/Users/luma/Code/DataSet/Mesh/RedCan.obj";
+  //  std::string sSrcImage = "/Users/luma/Code/Luma/PWP3D/Files/Images/248-LiveRGB.png";
+  //  std::string sCameraMatrix = "/Users/luma/Code/Luma/PWP3D/Files/CameraCalibration/Kinect.cal";
+  //  std::string sTargetMask = "/Users/luma/Code/Luma/PWP3D/Files/Masks/480p_All_VideoMask.png";
+  //  std::string sHistSrc = "/Users/luma/Code/Luma/PWP3D/Files/Images/248-LiveRGB.png";
+  //  std::string sHistMask = "/Users/luma/Code/Luma/PWP3D/Files/Masks/248-ID-1-LiveImage.png";
 
   // ---------------------------------------------------------------------------
   char str[100];
   int i;
 
-  int width = 640, height = 480;
+  int width = 1920, height = 1280;
   int viewCount = 1, objectCount = 1;
   int objectId = 0, viewIdx = 0, objectIdx = 0;
+  double r, xy, z;
 
   Timer t;
 
@@ -93,9 +104,15 @@ int main(void)
   iterConfig->iterObjectIds[viewIdx][objectIdx] = 0;
   iterConfig->iterViewCount = 1;
   iterConfig->iterCount = 1;
+  iterConfig->useCUDAEF = true;
+  iterConfig->useCUDARender = true;
+
+  objects[objectIdx]->initialPose[viewIdx]->SetFrom(
+        atof(argv[argc-9]), atof(argv[argc-8]), atof(argv[argc-7]),
+        atof(argv[argc-6]), atof(argv[argc-5]), atof(argv[argc-4]));
 
   //step size per object and view
-  objects[objectIdx]->stepSize[viewIdx] = new StepSize3D(0.2f, 0.5f, 0.5f, 10.0f);
+  //objects[objectIdx]->stepSize[viewIdx] = new StepSize3D(0.2f, 0.5f, 0.5f, 10.0f);
 
   //initial pose per object and view
   // Notice the input pose here is angle, not radians for the rotation part
@@ -106,8 +123,8 @@ int main(void)
   //  objects[objectIdx]->initialPose[viewIdx]->SetFrom( -3.0f,-4.5f,28.f, -220.90f, -207.77f, 87.48f);
 
   // for red can demo
-  objects[objectIdx]->initialPose[viewIdx]->SetFrom(
-        1.0f, 3.0f, 30.f, 180.f, 80.f, 60.f);
+  //  objects[objectIdx]->initialPose[viewIdx]->SetFrom(
+  //        1.0f, 3.0f, 30.f, 180.f, 80.f, 60.f);
 
   //primary initilisation
   OptimisationEngine::Instance()->Initialise(width, height);
@@ -124,40 +141,25 @@ int main(void)
 
   cv::Mat ResultMat(height,width,CV_8UC4, ResultImage->pixels);
   cv::imshow("initial pose", ResultMat);
-  cv::waitKey(1000);
+  cv::waitKey(0);
 
   std::cout<<"[App] Finish Rendered object initial pose."<<std::endl;
 
-  for (i=0; i<4; i++)
+  for (i=1; i<101; i++)
   {
-    switch (i)
-    {
-    case 0:
-      iterConfig->useCUDAEF = true;
-      iterConfig->useCUDARender = true;
-      break;
-    case 1:
-      iterConfig->useCUDAEF = false;
-      iterConfig->useCUDARender = true;
-      break;
-    case 2:
-      iterConfig->useCUDAEF = true;
-      iterConfig->useCUDARender = false;
-      break;
-    case 3:
-      iterConfig->useCUDAEF = false;
-      iterConfig->useCUDARender = false;
-      break;
-    }
-
-    printf("======= mode: useCUDAAEF: %d, use CUDARender %d ========;\n",
-           iterConfig->useCUDAEF, iterConfig->useCUDARender);
-
-    sprintf(str, "/Users/luma/Code/Luma/PWP3D/Files/Results/result%04d.png", i);
+    r = atof(argv[argc-3]) / i;
+    xy = atof(argv[argc-2]) / i;
+    z = atof(argv[argc-1]) / i;
+    objects[objectIdx]->stepSize[viewIdx]->SetFrom(r, xy, xy, z);
+    
+    printf("%d Step: %f %f %f\n", i, r, xy, z);
+    
+    sprintf(str, "%sResults/result_%03d.png", (char*)folder.c_str(), i);
 
     //main processing
     t.restart();
     OptimisationEngine::Instance()->Minimise(objects, views, iterConfig);
+    objects[objectIdx]->initialPose[viewIdx]->SetFrom(objects[objectIdx]->pose[viewIdx]);
     t.check("Iteration");
 
     //result plot
@@ -166,10 +168,10 @@ int main(void)
           objects[objectIdx], views[viewIdx], objects[objectIdx]->pose[viewIdx]);
 
     //result save to file
-    //    ImageUtils::Instance()->SaveImageToFile(result, str);
+    ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
     cv::Mat ResultMat(height,width,CV_8UC4, ResultImage->pixels);
     cv::imshow("result", ResultMat);
-    cv::waitKey(2000);
+    cv::waitKey(100);
 
     printf("final pose result %f %f %f %f %f %f %f\n\n",
            objects[objectIdx]->pose[viewIdx]->translation->x,
@@ -179,15 +181,15 @@ int main(void)
            objects[objectIdx]->pose[viewIdx]->rotation->vector4d.y,
            objects[objectIdx]->pose[viewIdx]->rotation->vector4d.z,
            objects[objectIdx]->pose[viewIdx]->rotation->vector4d.w);
+
+    //posteriors plot
+    sprintf(str, "%sResults/posterior_%03d.png", (char*)folder.c_str(), i);
+    VisualisationEngine::Instance()->GetImage(
+            ResultImage, GETIMAGE_POSTERIORS,
+            objects[objectIdx], views[viewIdx], objects[objectIdx]->pose[viewIdx]);
+
+    ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
   }
-
-  //posteriors plot
-  sprintf(str, "/Users/luma/Code/Luma/PWP3D/Files/Results/posteriors.png");
-  VisualisationEngine::Instance()->GetImage(
-        ResultImage, GETIMAGE_POSTERIORS,
-        objects[objectIdx], views[viewIdx], objects[objectIdx]->pose[viewIdx]);
-
-  ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
 
   //primary engine destructor
   OptimisationEngine::Instance()->Shutdown();
