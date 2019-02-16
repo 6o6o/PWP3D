@@ -7,14 +7,23 @@ using namespace Perseus::Utils;
 
 std::string folder = "/home/src/pwp3d/Files/";
 
+// determine step size relative to current distance to the camera
+inline double step_size(double x, double b, double maxval, double k = 1.0)
+{
+    double diff = abs(x-b) * k + 1;
+    double y = maxval / diff;
+    if (x > b) y = 2 * maxval - y;
+    return y;
+}
+
 int main(int argc, char** argv)
 {
-  std::string sModelPath = folder + "Models/shuttle.obj";
-  std::string sSrcImage = folder + "Images/shuttle.jpg";
-  std::string sCameraMatrix = folder + "CameraCalibration/canon_t3.cal";
+  std::string sModelPath = argv[argc-11];
+  std::string sSrcImage = argv[1];
+  std::string sCameraMatrix = folder + "CameraCalibration/drill_n1.cal";
   std::string sTargetMask = folder + "Masks/1280p_All_VideoMask.png";
-  std::string sHistSrc = folder + "Images/shuttle.jpg";
-  std::string sHistMask = folder + "Masks/shuttle.png";
+  std::string sHistSrc = argv[1];
+  std::string sHistMask = argv[argc-12];
 
   
   //  std::string sModelPath = "/Users/luma/Code/Luma/PWP3D/Files/Models/Renderer/long.obj";
@@ -43,15 +52,17 @@ int main(int argc, char** argv)
 
   // ---------------------------------------------------------------------------
   char str[100];
-  int i;
+  int i, n = 10;
 
   int width = 1920, height = 1280;
   int viewCount = 1, objectCount = 1;
   int objectId = 0, viewIdx = 0, objectIdx = 0;
-  double r, xy, z;
+  double step_r, step_xy, step_z, z, param[n];
 
   Timer t;
 
+  for(i = 0; i < n; i++) param[i] = atof(argv[argc-n+i]);
+  
   //result visualisation
   ImageUChar4* ResultImage = new ImageUChar4(width, height);
 
@@ -103,13 +114,12 @@ int main(int argc, char** argv)
   iterConfig->levelSetBandSize = 8;
   iterConfig->iterObjectIds[viewIdx][objectIdx] = 0;
   iterConfig->iterViewCount = 1;
-  iterConfig->iterCount = 1;
+  iterConfig->iterCount = param[0];
   iterConfig->useCUDAEF = true;
   iterConfig->useCUDARender = true;
 
   objects[objectIdx]->initialPose[viewIdx]->SetFrom(
-        atof(argv[argc-9]), atof(argv[argc-8]), atof(argv[argc-7]),
-        atof(argv[argc-6]), atof(argv[argc-5]), atof(argv[argc-4]));
+        param[1], param[2], param[3], param[4], param[5], param[6]);
 
   //step size per object and view
   //objects[objectIdx]->stepSize[viewIdx] = new StepSize3D(0.2f, 0.5f, 0.5f, 10.0f);
@@ -144,23 +154,33 @@ int main(int argc, char** argv)
   cv::waitKey(0);
 
   std::cout<<"[App] Finish Rendered object initial pose."<<std::endl;
+  //objects[objectIdx]->histogramVarBin[views[viewIdx]->viewId]->mergeAlphaForeground = 0.03f;
+  //objects[objectIdx]->histogramVarBin[views[viewIdx]->viewId]->mergeAlphaBackground = 0.02f;
 
-  for (i=1; i<101; i++)
+  bool sequence = argc > 14;
+  int loopcount = sequence ? argc-12 : 101;
+  for (i=1; i<loopcount; i++)
   {
-    r = atof(argv[argc-3]) / i;
-    xy = atof(argv[argc-2]) / i;
-    z = atof(argv[argc-1]) / i;
-    objects[objectIdx]->stepSize[viewIdx]->SetFrom(r, xy, xy, z);
+    z = objects[objectIdx]->initialPose[viewIdx]->translation->z;
     
-    printf("%d Step: %f %f %f\n", i, r, xy, z);
+    step_r = step_size(z, param[3], param[7]);
+    step_xy = step_size(z, param[3], param[8]);
+    step_z = step_size(z, param[3], param[9]);
+    objects[objectIdx]->stepSize[viewIdx]->SetFrom(step_r, step_xy, step_xy, step_z);
     
-    sprintf(str, "%sResults/result_%03d.png", (char*)folder.c_str(), i);
+    printf("%d Step: %f %f %f\n", i, step_r, step_xy, step_z);
+    ImageUtils::Instance()->LoadImageFromFile(camera, argv[sequence ? i : 1]);
+    OptimisationEngine::Instance()->RegisterViewImage(views[viewIdx], camera);
 
     //main processing
     t.restart();
     OptimisationEngine::Instance()->Minimise(objects, views, iterConfig);
     objects[objectIdx]->initialPose[viewIdx]->SetFrom(objects[objectIdx]->pose[viewIdx]);
     t.check("Iteration");
+    
+    //update at your own risk
+    //HistogramEngine::Instance()->UpdateVarBinHistogram(
+    //    objects[objectIdx], views[viewIdx], camera, objects[objectIdx]->pose[viewIdx]);
 
     //result plot
     VisualisationEngine::Instance()->GetImage(
@@ -168,10 +188,11 @@ int main(int argc, char** argv)
           objects[objectIdx], views[viewIdx], objects[objectIdx]->pose[viewIdx]);
 
     //result save to file
-    ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
+    sprintf(str, "%sResults/result_%03d.png", folder.c_str(), i);
+    //ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
     cv::Mat ResultMat(height,width,CV_8UC4, ResultImage->pixels);
     cv::imshow("result", ResultMat);
-    cv::waitKey(100);
+    cv::waitKey(1);
 
     printf("final pose result %f %f %f %f %f %f %f\n\n",
            objects[objectIdx]->pose[viewIdx]->translation->x,
@@ -183,12 +204,12 @@ int main(int argc, char** argv)
            objects[objectIdx]->pose[viewIdx]->rotation->vector4d.w);
 
     //posteriors plot
-    sprintf(str, "%sResults/posterior_%03d.png", (char*)folder.c_str(), i);
+    sprintf(str, "%sResults/posterior_%03d.png", folder.c_str(), i);
     VisualisationEngine::Instance()->GetImage(
             ResultImage, GETIMAGE_POSTERIORS,
             objects[objectIdx], views[viewIdx], objects[objectIdx]->pose[viewIdx]);
 
-    ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
+    //ImageUtils::Instance()->SaveImageToFile(ResultImage, str);
   }
 
   //primary engine destructor
