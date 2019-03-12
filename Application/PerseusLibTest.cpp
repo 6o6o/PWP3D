@@ -8,9 +8,9 @@ using namespace Perseus::Utils;
 std::string folder = "/home/src/pwp3d/Files/";
 
 // determine step size relative to current distance to the camera
-inline double step_size(double x, double b, double maxval, double k = 1.0)
+inline double step_size(double x, double b, double maxval, double k = 8.0)
 {
-    double diff = abs(x-b) * k + 1;
+    double diff = fabs(x-b) * k / b + 1;
     double y = maxval / diff;
     if (x > b) y = 2 * maxval - y;
     return y;

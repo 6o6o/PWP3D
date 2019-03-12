@@ -111,11 +111,13 @@ int Model::createFromFile(FILE *file)
       buf[strlen(buf)-1] = '\0';
       break;
     case 'f': //face
+      if (this->groups.size() == 0)
+          this->groups.push_back(group);
       fscanf(file, "%s", buf);
       sscanf(buf, "%d", &v);
       face = new ModelFace();
       face->vertices.push_back(v-1);
-      while(fscanf(file, "%d", &v) > 0){
+      while(fscanf(file, "%d%*[/0-9]", &v) > 0){
         face->vertices.push_back(v-1);
       }
 
